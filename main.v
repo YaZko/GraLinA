@@ -80,20 +80,45 @@ Require Import Equivalence.
 
 Reserved Notation "g1 == g2" (at level 50).
 
+Program Definition transport_Graph_eq
+        {a b c d: nat} (eac : a = c) (ebd: b = d) (G: Graph a b):
+  Graph c d.
+Proof.
+  intros.
+  eapply eq_rect. 2: exact ebd.
+  apply (eq_rect _ (fun n => Graph n b) G). exact eac.
+Defined.
+
 Program Definition transport_Graph_assoc
         {a b c d e f: nat} (G: Graph (a + b + c) (d + e + f)):
   Graph (a + (b + c)) (d + (e + f)).
 Proof.
-  apply eq_rect with (x := d + e + f); [| auto with arith].
-  apply (eq_rect _ (fun n => Graph n (d + e + f)) G); auto with arith.  
-Qed.
+  eapply transport_Graph_eq. 3: apply G.
+  all: auto with arith.
+Defined.
+
+Lemma plus_n_0:
+  forall (n: nat), n + 0 = n.
+Proof.
+  induction n; simpl; intros.
+  reflexivity.
+  rewrite IHn. reflexivity.
+Defined.
 
 Program Definition transport_Graph_plus0
         {a b: nat} (G: Graph (a + 0) (b + 0)):
   Graph a b.
 Proof.
-  apply eq_rect with (x := b + 0); [| auto with arith].
-  apply (eq_rect _ (fun n => Graph n (b + 0)) G); auto with arith.  
+  eapply transport_Graph_eq. 3: apply G.
+  all: apply plus_n_0.
+Defined.
+
+Program Definition transport_Graph_plus0'
+        {a b: nat} (G: Graph a b):
+  Graph (a + 0) (b + 0).
+Proof.
+  eapply transport_Graph_eq. 3: apply G.
+  all: symmetry; apply plus_n_0. 
 Defined.
 
 Inductive eqG: forall {n m: nat}, relation (Graph n m) :=
@@ -117,7 +142,7 @@ Inductive eqG: forall {n m: nat}, relation (Graph n m) :=
 | IdRight: forall {n m} (G: Graph n m), (G ∘ ≡m≡) == G
 | IdLeft:  forall {n m} (G: Graph n m), ≡n≡ ∘ G == G
 | IdUp:    forall {n m} (G: Graph n m), ∅ ⊕ G == G
-| IdDown:    forall {n m} (G: Graph n m), transport_Graph_plus0 (G ⊕ ∅) == G
+| IdDown:    forall {n m} (G: Graph n m), G ⊕ ∅ == transport_Graph_plus0' G
 
 (** associativity of composition **)
 | AssocComp: forall {n m p q: nat} (g1: Graph n m) (g2: Graph m p) (g3: Graph p q),
@@ -188,35 +213,47 @@ intros g1 g1' eq1 g2 g2' eq2.
 constructor; auto.
 Qed.
 
-Program Definition transport_Graph_plus0'
-        {a b: nat} (G: Graph a b):
-  Graph (a + 0) (b + 0).
+Lemma cong_transport:
+  forall n m p q (eq1: n = p) (eq2: m = q) (g1 g2: Graph n m),
+    g1 == g2 ->
+    transport_Graph_eq eq1 eq2 g1 == transport_Graph_eq eq1 eq2 g2.
 Proof.
-  eapply eq_rect; eauto with arith.
-  apply (eq_rect _ (fun n => Graph n b) G); auto with arith.  
-Defined.
+  unfold transport_Graph_eq.
+  intros. subst.
+  clean. auto.
+Qed.
 
-(* Lemma IdDown': forall {n m} (G: Graph n m), *)
-(*     (G ⊕ ∅) == transport_Graph_plus0' G. *)
-(* Proof. *)
-(*   intros n m G. *)
-(*   unfold transport_Graph_plus0'. *)
-(*   generalize dependent (m + 0). (plus_n_O m). generalize dependent (m + 0). intros H. *)
-(*   rewrite <- H. *)
-(*   (* unfold eq_rect. *) *)
-(*   (* destruct (plus_n_O m). *) *)
-(*   (* rewrite <- plus_n_O. *) *)
-(*   (* rewrite Nat.plus_n_O *) *)
-(*   (* rewrite <- eq_rect_eq_dec. _ _ _ foo). with (. *) *)
+Lemma transport_cancel:
+  forall n m p q (eq1: n = p) (eq2: m = q) (g1: Graph p q),
+    transport_Graph_eq eq1 eq2 (transport_Graph_eq (eq_sym eq1) (eq_sym eq2) g1) == g1.
+Proof.
+  unfold transport_Graph_eq.
+  intros. subst.
+  clean. reflexivity.
+Qed.
 
-(* Lemma twister_twist: twister 1 1 == ><. *)
-(* Proof. *)
-(*   cbn. clean. *)
-(*   rewrite IdUp. *)
-(*   rewrite IdDown'; unfold transport_Graph_plus0'; clean. *)
-(*   etransitivity. *)
-(*   eapply CongComp; [| reflexivity]. *)
-(*   assert (H: -- ⊕ ∅ == --) by admit. *)
+Lemma IdDown': forall {n m} (G: Graph n m),
+    transport_Graph_plus0 (G ⊕ ∅) == G.
+Proof.
+  intros n m G.
+  unfold transport_Graph_plus0.
+  etransitivity.
+  apply cong_transport.
+  apply IdDown.
+  unfold transport_Graph_plus0'.
+  apply transport_cancel.
+Qed.
+
+Lemma twister_twist: twister 1 1 == ><.
+Proof.
+  cbn. clean.
+  rewrite IdUp.
+  rewrite IdDown; unfold transport_Graph_plus0', transport_Graph_eq; clean.
+  rewrite AssocComp. rewrite MFI.
+  etransitivity.
+  apply MFI.
+  eapply CongComp; [| reflexivity].
+  assert (H: -- ⊕ ∅ == --) by admit.
 
 
 (* Lemma slide_twist: forall n m (g1 g2: Graph n m), *)
