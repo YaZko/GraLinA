@@ -59,6 +59,16 @@ Require Import Coq.Program.Tactics.
 Require Import Arith.
 Require Import Omega.
 
+
+Definition transport_Graph_eq
+        {a b c d: nat} (eac : a = c) (ebd: b = d) (G: Graph a b):
+  Graph c d.
+Proof.
+  intros.
+  eapply eq_rect. 2: exact ebd.
+  apply (eq_rect _ (fun n => Graph n b) G). exact eac.
+Defined.
+
 (* n wires twisted over m wires *)
 Program Fixpoint twist_aux n: Graph (S n) (S n) :=
   match n with
@@ -83,6 +93,7 @@ Qed.
 Next Obligation.
   omega.
 Qed.
+
 (* Notation "'>' n '•' m '<'" := (twister n m) (at level 13, n at next level). *)
 
 Require Import Relations.
@@ -90,14 +101,6 @@ Require Import Equivalence.
 
 Reserved Notation "g1 == g2" (at level 50).
 
-Program Definition transport_Graph_eq
-        {a b c d: nat} (eac : a = c) (ebd: b = d) (G: Graph a b):
-  Graph c d.
-Proof.
-  intros.
-  eapply eq_rect. 2: exact ebd.
-  apply (eq_rect _ (fun n => Graph n b) G). exact eac.
-Defined.
 
 Program Definition transport_Graph_assoc
         {a b c d e f: nat} (G: Graph (a + b + c) (d + e + f)):
@@ -258,11 +261,19 @@ Proof.
 Qed.
 
 Ltac clean :=
-  unfold transport_Graph_plus0,transport_Graph_plus0', transport_Graph_eq;
+  unfold transport_Graph_assoc, transport_Graph_plus0,transport_Graph_plus0', transport_Graph_eq;
   repeat (rewrite <- eq_rect_eq_dec by (apply Nat.eq_dec)).
 
 Ltac rrewrite H :=
   rewrite H; clean.
+
+Lemma eq_rect_cancel:
+  forall n p (eq1: n = p) (T: nat -> Type) (x: T p),
+    eq_rect n T (eq_rect _ _ x n (eq_sym eq1)) _ eq1 = x.
+Proof.
+  intros. subst.
+  clean. reflexivity.
+Qed.
 
 Lemma IdDown': forall {n m} (G: Graph n m),
     transport_Graph_plus0 (G ⊕ ∅) == G.
@@ -312,92 +323,18 @@ Proof.
   induction g1; intros; subst; try congruence.
   - clear H H0.
     rewrite twister_twist.
+Abort.
 
-    Lemma test: forall (g: Graph 0 0),
-        g == ∅ \/
-        exists n (g1: Graph 0 n) (g2: Graph n 0), g == g1 ∘ g2. 
-    Proof.
-      intro g.
-      refine
-        (match g as g' in Graph n m with
-         | ∅ => or_introl (reflexivity ∅)
-         | g1 ∘ g2 => _
-         | g1 ⊕ g2 => _
-         | _ => False
-         end).
-       Show Proof.  
- 
-    Lemma test: forall (g: Graph 1 1),
-        g == -- \/
-        exists n (g1: Graph 1 n) (g2: Graph n 1), g == g1 ∘ g2. 
-    Proof.
-      intro g.
-      
-      refine
-        (match g as g' in Graph n m with
-         | -- => or_introl (reflexivity --)
-         | g1 ∘ g2 => _
-         | g1 ⊕ g2 => _
-         | _ => False
-         end).
-       Show Proof.  
-      
-      refine
-        (match g as g1 in Graph n m
-               return
-               ()
-         with
-         | -- => or_introl (reflexivity --)
-         | g1 ∘ g2 => _
-         | g1 ⊕ g2 => _
-         | _ => False
-         end).
-      - Show Proof.  
-
-
-
-        Lemma test: forall a (g: Graph a a),
-        a = 1 ->
-        g == ≡a≡ \/
-        exists n (g1: Graph a n) (g2: Graph n a), g == g1 ∘ g2. 
-    Proof.
-      intros a g.
-      refine
-        (match g with
-           _ => _
-         end).
-
-      intros a [].
-      generalize 1 at 2.
-      intros g.
-      destruct g.
-
-    refine
-      (match g2 with
-       | Empty => _
-       | _ => _
-       end).
-    intros ? ?; auto.
-    intros ? ?; auto.
-    intros ? ?; auto.
-    intros ? ?; auto.
-    intros ? ?; auto.
-    intros ? ?; auto.
-    Focus 2.
-
-    +  
-
-Lemma tropcool: (-- ⊕ o-) ∘ >- == --.
+Lemma sum_distribute:
+  forall n m,
+    ≡ n + m ≡ == ≡ n ≡ ⊕ ≡ m ≡.
 Proof.
-  rewrite <- Comm.
-  
-
- 
-(* Lemma slide_twist: forall {n m p q} (g1: Graph n m) (g2: Graph p q), *)
-(*     (g1 ⊕ g2) ∘ (twister m q) == (twister n p) ∘ (g1 ⊕  g2). *)
-(* Proof. *)
-  
- 
+  induction n; simpl; intros. symmetry; apply IdUp.
+  rewrite IHn.
+  rewrite AssocSum.
+  unfold transport_Graph_assoc, transport_Graph_eq.
+  clean. reflexivity.
+Qed.
 
 (* Theorem bizarrofree: forall {n m: nat} (g1 g2: Graph n m), *)
 (*     g1 == g2 -> (bizarro g1) == (bizarro g2). *)
@@ -406,4 +343,45 @@ Proof.
 (*   etransitivity; [apply B1 |   symmetry; eapply AssocComp; eauto]. *)
 (*   etransitivity; eauto. *)
 (* Qed. *)
+
+
+Lemma slide_twist: forall {n m p q} (g1: Graph n m) (g2: Graph p q),
+    (g1 ⊕ g2) ∘ (twister m q) == (twister n p) ∘ (g1 ⊕  g2).
+Proof.
+
+  induction n; cbn; intros m p q g1 g2.
+  -  rewrite IdLeft.
+    destruct m; cbn.
+    + apply IdRight.
+    + etransitivity. 2: apply IdRight.
+      apply CongComp. reflexivity.
+      cbn.
+      rewrite sum_distribute.
+      rewrite AssocSum.
+      clean.
+
+      generalize (twister_obligation_1 q m).
+      generalize (twister_obligation_2 q m).
+      generalize (Nat.add_comm m q).
+      intro C.
+      generalize (f_equal S C). intro D.
+      cbn in *.
+      intros. rewrite cong_transport_r.
+            
+      generalize (Nat.add_comm m q).
+      intro C.
+      generalize (f_equal S C). intro D.
+      rewrite Nat.add_comm.
+      rewrite <- eq_rect_eq_dec.
+
+
+Qed.
+
+(* Lemma tropcool: (-- ⊕ o-) ∘ >- == --. *)
+(* Proof. *)
+(*   etransitivity. *)
+(*   eapply CongComp. *)
+(*   reflexivity. *)
+(*   apply Sym, Comm. *)
+  
 
