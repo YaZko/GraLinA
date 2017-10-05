@@ -1,3 +1,43 @@
+(*
+* L'algèbre sous-jacente:
+
+ - ≡n≡ est élément neutre de ∘ pour tout n
+ - ∅ élément neutre de ⊕
+ - ∘ est associative
+ - ⊕ est associative
+ - Le MFI  
+
+* Les règles structurelles des diagrammes
+
+ (Wires don't tangle)
+ - >< ∘ >< == -- ⊕ --
+ (Horizontal sliding, pour toutes les tailles possibles de A et B)
+ - (≡ ⊕ B) ∘ (A ⊕ ≡) == A ⊕ B == (A ⊕ ≡) ∘ (≡ ⊕ B) 
+ (Twisty sliding, pour toutes les tailles possibles de A et B, >< étant un twister adapté)
+ - (A ⊕ B) >< = (≡ ⊕ B) >< (A ⊕ ≡)
+ (Les diagrammes sont compositionnels)
+ - Obtenue par nos deux règles de congruence  
+
+* Les générateurs et leur axiomatisation
+
+ (Axiomatisation de l'addition )
+ - Comm: >< ∘ >- ==  >-
+ - Assoc: (-- ⊕ >-) ∘ >- == (>- ⊕ --) ∘ >-
+ - Unit: -- == (o- ⊕ --) ∘ >-
+
+ (Axiomatisation de copy (bizarro des précédents))
+ - CoComm: -< == -< ∘ ><
+ - CoAssoc: -< ∘ (-< ⊕ --) == -< ∘ (--  ⊕ -<)
+ - CoUnit: -< ∘ (-o ⊕ --) == --
+
+ (Axiomatisation de l'interaction des deux mondes)
+ - B1: >- ∘ -< == (-< ⊕ -<) ∘ (-- ⊕ >< ⊕ --) ∘ (>- ⊕ >-)
+ - B2: >- ∘ -o == -o ⊕ -o
+ - B3: o- ∘ -< == o- ⊕ o-
+ - B4: o- ∘ -o == ∅
+
+*)
+
 (** The type of graphs:
     - Empty graph
     - The Zero graph o- and its dual, the Discard graph -o
@@ -134,7 +174,7 @@ Proof.
   all: symmetry; apply plus_n_0. 
 Defined.
 
-Inductive eqG: forall {n m: nat}, relation (Graph n m) :=
+Inductive eqG: forall {n m p q: nat}, Graph n m -> Graph p q -> Prop :=
 (** Axiomatisation of addition **)
 | Comm: >< ∘ >- == >-
 | Assoc: (-- ⊕ >-) ∘ >- == (>- ⊕ --) ∘ >-
@@ -155,13 +195,16 @@ Inductive eqG: forall {n m: nat}, relation (Graph n m) :=
 | IdRight: forall {n m} (G: Graph n m), (G ∘ ≡m≡) == G
 | IdLeft:  forall {n m} (G: Graph n m), ≡n≡ ∘ G == G
 | IdUp:    forall {n m} (G: Graph n m), ∅ ⊕ G == G
-| IdDown:    forall {n m} (G: Graph n m), G ⊕ ∅ == transport_Graph_plus0' G
+| IdDown:  forall {n m} (G: Graph n m), G ⊕ ∅ == G
 
 (** associativity of composition **)
 | AssocComp: forall {n m p q: nat} (g1: Graph n m) (g2: Graph m p) (g3: Graph p q),
     g1 ∘ (g2 ∘ g3) == (g1 ∘ g2) ∘ g3
 | AssocSum: forall {n m p q r s: nat} (g1: Graph n m) (g2: Graph p q) (g3: Graph r s),
-    g1 ⊕ (g2 ⊕ g3) == transport_Graph_assoc ((g1 ⊕ g2) ⊕ g3)
+    g1 ⊕ (g2 ⊕ g3) == (g1 ⊕ g2) ⊕ g3
+
+(** Wires don't tangle **)
+| NoTangle: >< ∘ >< == -- ⊕ --
 
 (** Middle Four Interchange principle **)
 | MFI: forall {a b c n m p}
@@ -170,20 +213,29 @@ Inductive eqG: forall {n m: nat}, relation (Graph n m) :=
     (A ⊕ C) ∘ (B ⊕ D) == (A ∘ B) ⊕ (C ∘ D)
 
 (** Congruence closure with respect to both composition and sum **)
-| CongSum: forall {n m p q: nat} (g1 g1': Graph n m) (g2 g2': Graph p q),
+| CongSum: forall {n1 m1 n1' m1' n2 m2 n2' m2': nat}
+             (g1: Graph n1 m1) (g1': Graph n1' m1')
+             (g2: Graph n2 m2) (g2': Graph n2' m2'),
     g1 == g1' -> g2 == g2' -> g1 ⊕ g2 == g1' ⊕ g2'
-| CongComp: forall {n m p: nat} (g1 g1': Graph n m) (g2 g2': Graph m p),
+| CongComp: forall {n m p n' m' p': nat}
+              (g1: Graph n m) (g1': Graph n' m')
+              (g2: Graph m p) (g2': Graph m' p'),
     g1 == g1' -> g2 == g2' -> g1 ∘ g2 == g1' ∘ g2'
 
 (** Reflexive, symmetric, transitive closure **)
 | Refl: forall {n m} (g: Graph n m), g == g
-| Sym: forall {n m} (g1: Graph n m) g2, g1 == g2 -> g2 == g1
-| Trans: forall {n m} (g1 g2 g3: Graph n m), g1 == g2 -> g2 == g3 -> g1 == g3
+| Sym: forall {n m p q} (g1: Graph n m) (g2: Graph p q), g1 == g2 -> g2 == g1
+| Trans: forall {n1 m1 n2 m2 n3 m3}
+           (g1: Graph n1 m1) (g2: Graph n2 m2) (g3: Graph n3 m3),
+    g1 == g2 -> g2 == g3 -> g1 == g3
+
+| Transport: forall {n m p q} (g: Graph n m) (eq1: n = p) (eq2: m = q),
+    g == eq_rect _ (Graph p) (eq_rect _ (fun n => Graph n m) g _ eq1) _ eq2
 where "g1 == g2" := (eqG g1 g2).
 
 Require Import Classes.RelationClasses.
 
-Instance PEq_equiv (n m: nat): @Equivalence (Graph n m) (@eqG n m).
+Instance PEq_equiv (n m: nat): @Equivalence (Graph n m) (@eqG n m n m).
 Proof.
   split.
   intros ?; apply Refl.
@@ -212,43 +264,51 @@ Qed.
 Require Import Setoid.
 
 Add Parametric Morphism n m p q: Sum with
-signature (@eqG n m ==> @eqG p q ==> @eqG (n + p) (m + q)) as proper_sum. 
+signature (@eqG n m n m ==> @eqG p q p q ==> @eqG (n + p) (m + q) (n + p) (m + q)) as proper_sum. 
 intros g1 g1' eq1 g2 g2' eq2.
 constructor; auto.
 Qed.
 
+(* Add Parametric Morphism n m n' m' p q p' q': Sum with *)
+(*     signature (@eqG n m n' m' ==> *)
+(*                @eqG p q p' q' ==> *)
+(*                @eqG (n + p) (m + q) (n' + p') (m' + q')) as proper_sum. *)
+(* intros g1 g1' eq1 g2 g2' eq2. *)
+(* constructor; auto. *)
+(* Qed. *)
+
 Add Parametric Morphism n m p: Comp with
-signature (@eqG n m ==> @eqG m p ==> @eqG n p) as proper_comp. 
+signature (@eqG n m n m ==> @eqG m p m p ==> @eqG n p n p) as proper_comp. 
 intros g1 g1' eq1 g2 g2' eq2.
 constructor; auto.
 Qed.
 
 Lemma cong_transport:
-  forall n m p q (eq1: n = p) (eq2: m = q) (g1 g2: Graph n m),
+  forall n m p q (eq1 eq1': n = p) (eq2 eq2': m = q) (g1 g2: Graph n m),
     g1 == g2 ->
-    transport_Graph_eq eq1 eq2 g1 == transport_Graph_eq eq1 eq2 g2.
+    transport_Graph_eq eq1 eq2 g1 == transport_Graph_eq eq1' eq2' g2.
 Proof.
   unfold transport_Graph_eq.
   intros. subst.
-  rewrite <- eq_rect_eq_dec by (apply Nat.eq_dec); auto.
+  rewrite <-! eq_rect_eq_dec by (apply Nat.eq_dec); auto.
 Qed.
 
 Lemma cong_transport_l:
-  forall n m p (eq1: n = p) (g1 g2: Graph n m),
+  forall n m p (eq1 eq2: n = p) (g1 g2: Graph n m),
     g1 == g2 ->
-    eq_rect _ (fun k => Graph k m) g1 _ eq1 == eq_rect _ (fun k => Graph k m) g2 _ eq1.
+    eq_rect _ (fun k => Graph k m) g1 _ eq1 == eq_rect _ (fun k => Graph k m) g2 _ eq2.
 Proof.
   intros. subst.
-  rewrite <- eq_rect_eq_dec by (apply Nat.eq_dec); auto.
+  do 2 rewrite <- eq_rect_eq_dec by (apply Nat.eq_dec); auto.
 Qed.
 
 Lemma cong_transport_r:
-  forall n m q (eq2: m = q) (g1 g2: Graph n m),
+  forall n m q (eq1 eq2: m = q) (g1 g2: Graph n m),
     g1 == g2 ->
-    eq_rect _ _ g1 _ eq2 == eq_rect _ _ g2 _ eq2.
+    eq_rect _ _ g1 _ eq1 == eq_rect _ _ g2 _ eq2.
 Proof.
   intros. subst.
-  rewrite <- eq_rect_eq_dec by (apply Nat.eq_dec); auto.
+  do 2 rewrite <- eq_rect_eq_dec by (apply Nat.eq_dec); auto.
 Qed.
 
 Lemma transport_cancel:
@@ -260,38 +320,53 @@ Proof.
   rewrite <- eq_rect_eq_dec by (apply Nat.eq_dec); reflexivity.
 Qed.
 
-Ltac clean :=
+Ltac clean_aux :=
   unfold transport_Graph_assoc, transport_Graph_plus0,transport_Graph_plus0', transport_Graph_eq;
   repeat (rewrite <- eq_rect_eq_dec by (apply Nat.eq_dec)).
 
-Ltac rrewrite H :=
-  rewrite H; clean.
+Ltac sym := apply Sym.
+Ltac trans H := apply Trans with H.
+Ltac etrans := eapply Trans.
+Ltac refl := eapply Refl.
 
-Lemma eq_rect_cancel:
-  forall n p (eq1: n = p) (T: nat -> Type) (x: T p),
-    eq_rect n T (eq_rect _ _ x n (eq_sym eq1)) _ eq1 = x.
-Proof.
-  intros. subst.
-  clean. reflexivity.
-Qed.
+(** Currently clean eq_rect introduced by twister, and then remove emptyset from the left side member **)
+Ltac clean :=
+  clean_aux;
+  try rewrite IdUp;
+  match goal with
+  | |- ?G1 ∘ ?G2 == _ =>
+    refine (Trans _ (_ ∘ _) _ (CongComp _ _ _ _ _ _) _);
+    [clean | clean |]
+  | |- ?G1 ⊕ ?G2 == _ =>
+    match G2 with
+    | ∅ => refine (IdDown G1)
+    | _ =>
+      refine (Trans _ (_ ⊕ _) _ (CongSum G1 _ G2 _ _ _) _);
+      [clean | clean |]
+    end
+  | _ => idtac
+  end;
+  try refl.
 
-Lemma IdDown': forall {n m} (G: Graph n m),
-    transport_Graph_plus0 (G ⊕ ∅) == G.
-Proof.
-  intros n m G.
-  unfold transport_Graph_plus0.
-  etransitivity.
-  apply cong_transport.
-  apply IdDown.
-  unfold transport_Graph_plus0'.
-  apply transport_cancel.
-Qed.
+Ltac rew_assocsum :=
+match goal with
+| |- (?G1 ⊕ ?G2) ⊕ ?G3 == _ =>
+  refine (Trans _ (G1 ⊕ (G2 ⊕ G3)) _ _ _);
+    [sym; refine (AssocSum _ _ _) |]
+| |- ?G1 ⊕ (?G2 ⊕ ?G3) == _ =>
+  refine (Trans _ ((G1 ⊕ G2) ⊕ G3) _ (AssocSum _ _ _) _)
+end.
 
 Lemma idm1: -- == ≡1≡.
 Proof.
-  unfold idm.
-  rewrite IdDown; clean.
-  reflexivity.
+  sym.
+  exact (IdDown --).
+Qed.
+
+Lemma idm2: -- ⊕ -- == ≡2≡.
+Proof.
+  cbn.
+  sym; clean.
 Qed.
 
 Lemma IdRight': forall {n} (g: Graph n 1),
@@ -301,41 +376,84 @@ Proof.
   rewrite idm1, IdRight; reflexivity.
 Qed.
 
+Lemma stack_wires:
+  forall {n m}, (≡n≡ ⊕ ≡m≡) == ≡n+m≡.
+Proof.
+  induction n as [|n IH]; intros m; cbn.
+  clean.
+  rewrite <- IH.
+  rew_assocsum; refl.
+Qed.
+
 Lemma twister_twist: twister 1 1 == ><.
 Proof.
+  cbn; repeat clean.
+  rewrite AssocComp, MFI.
+  rewrite idm1, IdRight.
+  rewrite stack_wires, IdLeft.
+  refl.
+Qed.
+
+Lemma Transport_left:
+  forall {n m p} (g: Graph n m) (eq: n = p),
+    g == eq_rect n (fun x => Graph x m) g p eq.
+Proof.
+  intros.
+  refine (Trans _ _ _ (Transport g eq eq_refl) _).
+  rewrite <- eq_rect_eq_dec by auto with arith.
+  refl.
+Qed.
+
+Lemma Transport_right:
+  forall {n m q} (g: Graph n m) (eq: m = q),
+    g == eq_rect m (Graph n) g q eq.
+Proof.
+  intros.
+  refine (Trans _ _ _ (Transport g eq_refl eq) _).
+  rewrite <- eq_rect_eq_dec by auto with arith.
+  refl.
+Qed.
+
+Lemma twister_p_0: forall p, twister p 0 == ≡p≡.
+Proof.
+  induction p as [| p IH]; clean.
+  cbn.
+  (** TODO: hide with tac **)
+  refine (Trans _ _ _ _ _).
+  sym; refine (Transport_right _ _).
+  refine (Trans _ (_ ∘ _) _ (CongComp _ _ _ _ _ _) _).
+  refine (Trans _ (_ ⊕ _) _ (CongSum -- _ _ _ _ _) _).
+  refl.
+  exact IH.
+  rewrite idm1, stack_wires; refl.
+  sym; apply Transport_left.
   cbn; clean.
-  rewrite IdUp.
-  rewrite IdDown; clean. 
-  rewrite IdDown; clean. 
-  rewrite AssocComp.
-  rewrite (@MFI 1 1 1 1 1 1).
-  rewrite IdRight'.
-  assert ((-- ⊕ --) == ≡2≡) by (cbn; rewrite IdDown; clean; reflexivity).
-  rewrite H, IdLeft.
-  reflexivity.
+  rewrite idm1, stack_wires.
+  rewrite IdRight.
+  refl.
 Qed.
 
-Lemma slide_twist: forall n m (g1 g2: Graph n m),
-    n = 1 -> m = 1 ->
-    (g1 ⊕ g2) ∘ (twister m m) == (twister n n) ∘ (g1 ⊕  g2).
-Proof.
-  intros n m g1.
-  induction g1; intros; subst; try congruence.
-  - clear H H0.
-    rewrite twister_twist.
-Abort.
+(* Lemma slide_twist: forall {m n p q} (g1: Graph n m) (g2: Graph p q), *)
+(*     (g1 ⊕ g2) ∘ (twister m q) == (twister p n) ∘ (g2 ⊕ g1). *)
+(* Proof. *)
+(*   induction g1; intros g2. *)
+(*   - clean; cbn. *)
+(*     sym. *)
+(*     refine (@Trans ((twister p 0) ∘ (g2 ⊕ ∅)) (≡p≡ ∘ (g2 ⊕ ∅)) _ _ _). *)
+(*     apply twister_p_0. *)
+    
 
-Lemma sum_distribute:
-  forall n m,
-    ≡ n + m ≡ == ≡ n ≡ ⊕ ≡ m ≡.
-Proof.
-  induction n; simpl; intros. symmetry; apply IdUp.
-  rewrite IHn.
-  rewrite AssocSum.
-  unfold transport_Graph_assoc, transport_Graph_eq.
-  clean. reflexivity.
-Qed.
+(*   ; cbn; intros n p q g1 g2. *)
+(*   -    *)
 
+ 
+(* Lemma tropcool: (-- ⊕ o-) ∘ >- == --. *)
+(* Proof. *)
+  (* etransitivity. *)
+  (* eapply CongComp. *)
+  (* refl. *)
+  (* apply Sym, Comm. *)
+ 
 (* Theorem bizarrofree: forall {n m: nat} (g1 g2: Graph n m), *)
 (*     g1 == g2 -> (bizarro g1) == (bizarro g2). *)
 (* Proof. *)
@@ -343,45 +461,4 @@ Qed.
 (*   etransitivity; [apply B1 |   symmetry; eapply AssocComp; eauto]. *)
 (*   etransitivity; eauto. *)
 (* Qed. *)
-
-
-Lemma slide_twist: forall {n m p q} (g1: Graph n m) (g2: Graph p q),
-    (g1 ⊕ g2) ∘ (twister m q) == (twister n p) ∘ (g1 ⊕  g2).
-Proof.
-
-  induction n; cbn; intros m p q g1 g2.
-  -  rewrite IdLeft.
-    destruct m; cbn.
-    + apply IdRight.
-    + etransitivity. 2: apply IdRight.
-      apply CongComp. reflexivity.
-      cbn.
-      rewrite sum_distribute.
-      rewrite AssocSum.
-      clean.
-
-      generalize (twister_obligation_1 q m).
-      generalize (twister_obligation_2 q m).
-      generalize (Nat.add_comm m q).
-      intro C.
-      generalize (f_equal S C). intro D.
-      cbn in *.
-      intros. rewrite cong_transport_r.
-            
-      generalize (Nat.add_comm m q).
-      intro C.
-      generalize (f_equal S C). intro D.
-      rewrite Nat.add_comm.
-      rewrite <- eq_rect_eq_dec.
-
-
-Qed.
-
-(* Lemma tropcool: (-- ⊕ o-) ∘ >- == --. *)
-(* Proof. *)
-(*   etransitivity. *)
-(*   eapply CongComp. *)
-(*   reflexivity. *)
-(*   apply Sym, Comm. *)
-  
 
