@@ -96,9 +96,8 @@ Notation "'≡' n '≡'" := (idm n) (at level 12).
 
 Require Import Logic.Eqdep_dec.
 Require Import Coq.Program.Tactics.
-Require Import Arith.
+Require Import Nat Arith.
 Require Import Omega.
-
 
 Definition transport_Graph_eq
         {a b c d: nat} (eac : a = c) (ebd: b = d) (G: Graph a b):
@@ -376,6 +375,13 @@ Proof.
   rewrite idm1, IdRight; reflexivity.
 Qed.
 
+Lemma IdLeft': forall {n} (g: Graph 1 n),
+     -- ∘ g == g.
+Proof.
+  intros.
+  rewrite idm1, IdLeft; reflexivity.
+Qed.
+
 Lemma stack_wires:
   forall {n m}, (≡n≡ ⊕ ≡m≡) == ≡n+m≡.
 Proof.
@@ -433,20 +439,125 @@ Proof.
   refl.
 Qed.
 
-(* Lemma slide_twist: forall {m n p q} (g1: Graph n m) (g2: Graph p q), *)
-(*     (g1 ⊕ g2) ∘ (twister m q) == (twister p n) ∘ (g2 ⊕ g1). *)
-(* Proof. *)
-(*   induction g1; intros g2. *)
-(*   - clean; cbn. *)
-(*     sym. *)
-(*     refine (@Trans ((twister p 0) ∘ (g2 ⊕ ∅)) (≡p≡ ∘ (g2 ⊕ ∅)) _ _ _). *)
-(*     apply twister_p_0. *)
+Definition transport_add_left:
+  forall {n m p} (g: Graph (n + m) p), Graph (m + n) p.
+Proof.
+  intros.
+  refine (eq_rect _ (fun x => Graph x p) g _ (Nat.add_comm _ _)). 
+Defined.
+
+Definition transport_add_right:
+  forall {n m p} (g: Graph p (n + m)), Graph p (m + n).
+Proof.
+  intros.
+  refine (eq_rect _ (Graph p) g _ (Nat.add_comm _ _)). 
+Defined.
+
+(** Can we have something of this taste? **)
+(* Coercion transport_add_left {n m p}: (Graph (n + m) p) >-> (Graph (m + n) p). *)
+
+Ltac smp :=
+  repeat (match goal with
+          | H: existT _ _ _ = existT _ _ _ |- _ =>
+            apply (inj_pair2_eq_dec _ Nat.eq_dec) in H end); try subst.
+
+Lemma no_twist_gen:
+  forall {n m}, (twister n m) ∘ (transport_add_left (twister m n)) == ≡n≡ ⊕ ≡m≡.
+Proof.
+  induction n as [| n IH]; intros m.
+  - cbn.
+    refine (Trans _ _ _ (IdLeft _) _).
+    refine (Trans _ _ _ _ (Sym _ _ (IdUp _))).
+    (** to hide **)
+    unfold transport_add_left; refine (Trans _ _ _ (Sym _ _ (Transport_left _ _)) _).
+    apply twister_p_0.
+  - (** This ride is quite wild **)
+    
+(*     simpl twister. *)
+(*     refine (Trans _ (_ ∘ _) _ (CongComp _ _ _ _ _ _) _). *)
+(*     sym; refine (Transport_right _ _). *)
+(*     unfold transport_add_left; refine (Trans _ _ _ (Sym _ _ (Transport_left _ _)) _). *)
+(*     refine (Transport_left _ _); auto with arith. *)
+(* remember ((eq_rect (S (m + n)) (fun H : nat => Graph H (S (m + n))) (twist_aux m ⊕ (≡ n ≡)) (S (n + m)) *)
+(*                    (twister_obligation_1 m n))) as g2. *)
+(* remember ((eq_rect (m + S n) (fun x : nat => Graph x (m + S n)) (twister m (S n)) (S (m + n)) (eq_sym (plus_n_Sm m n)))) as g1. *)
+
+(* refine (Trans _ _ _ (Sym _ _ (AssocComp _ _ _)) _). *)
+
+(* sym. cbn. *)
+(* refine (Trans _ _ _ _ _). *)
+(* sym. *)
+(* apply AssocSum. *)
+(* refine (Sym _ _ (AssocSum _ _ _)) _). *)
+
+(* refine (Trans _ (_ ⊕ _) _ (CongSum _ _ _ _ _ _) _). *)
+(* cbn. *)
+
+    (* Lemma inv_empty: forall {n m} (g: Graph n m), *)
+    (*     g == ∅ -> n = 0 /\ m = 0. *)
+    (* Proof. *)
+    (*   induction g; intros eq. *)
+    (*   - auto. *)
+    (*   - inversion eq. subst; smp. *)
+
+    (*   intros n m g eq; remember ∅ as g'; revert Heqg'. dependent induction eq. *)
+    (*   induction 1. auto. *)
+    (*   - inversion eq; subst; clear eq. *)
+    (*     smp. *)
+    (*     induction *)
+
+
+    (* Lemma eqg_entry: forall {n m p q} (g1: Graph n m) (g2: Graph p q), *)
+    (*     g1 == g2 -> n = p. *)
+    (* Proof. *)
+    (*   induction g1; intros g2 eq; cbn. *)
+    (*   - inversion g2; subst; auto. *)
+        
+
+    (* refine (Trans _ (_ ∘ _) _ _ _). *)
+
+    (* refine (@Trans _ _ (m + (S n)) _ _  _ (_ ∘ (twister m (S n))) _ _ _). *)
+    (* refine (CongComp _ _ _ _ _ _). *)
+    (* refl. *)
+    (* refine (Trans _ _ _ _ _). *)
+    (* refl. *)
+    
+    (* refine (Trans _ ((twister (S n) m) ∘ (twister m (S n))) _ (CongComp _ _ _ _ _ _) _). *)
+    (* refl. *)
+    (* unfold transport_add_left; refine (Trans _ _ _ (Sym _ _ (Transport_left _ _)) _). *)
     
 
-(*   ; cbn; intros n p q g1 g2. *)
-(*   -    *)
+    (* sym. *)
+    (* simpl idm; rew_assocsum. *)
+    (* rewrite <- (IH m). *)
 
- 
+    (* cbn. *)
+    (* refine (Trans _ _ _ _ _). *)
+    (* sym; refine (Transport_right _ _). *)
+Admitted. 
+
+(* Lemma twister_p_1: forall {p n m} (g1: Graph p n) (g2: Graph 1 m), *)
+(*     (twister p 1) ∘ (g1 ⊕ g2) == (g2 ⊕ g1). *)
+(* Proof. *)
+(*   induction p as [| p IH]; intros n m g1 g2. *)
+(*   cbn; clean; refine (Trans _ _ _ (IdLeft' _) _). *)
+
+
+Lemma slide_twist: forall {m n p q} (g1: Graph n m) (g2: Graph p q),
+    (g1 ⊕ g2) ∘ (twister m q) == (twister p n) ∘ (g2 ⊕ g1).
+Proof.
+  induction g1; intros g2.
+  - clean; cbn.
+    sym.
+    refine (Trans ((twister p 0) ∘ (g2 ⊕ ∅)) (≡p≡ ∘ g2) _ _ _).
+    apply CongComp; [apply twister_p_0 | apply IdDown].
+    rewrite IdLeft, IdRight.
+    refl.
+  - admit.
+  - cbn. 
+    refine (Trans _ _ _ (IdRight _) _).
+Admitted.
+  
 (* Lemma tropcool: (-- ⊕ o-) ∘ >- == --. *)
 (* Proof. *)
   (* etransitivity. *)
