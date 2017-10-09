@@ -14,7 +14,7 @@ Inductive Graph: Type :=
 | Empty: Graph
 | Zero: Graph
 | Discard: Graph
-| Add: Graph
+| Addition: Graph
 | Copy: Graph
 | Twist: Graph
 | Id: Graph
@@ -29,7 +29,7 @@ Fixpoint gin (g: Graph) : nat :=
   | Discard
   | Id
   | Copy => 1
-  | Add
+  | Addition
   | Twist => 2
   | Sum g1 g2 => gin g1 + gin g2
   | Comp g1 g2 => gin g1
@@ -41,7 +41,7 @@ Fixpoint gout (g: Graph) : nat :=
   | Discard => 0
   | Zero
   | Id
-  | Add => 1
+  | Addition => 1
   | Copy
   | Twist => 2
   | Sum g1 g2 => gout g1 + gout g2
@@ -58,7 +58,7 @@ Fixpoint wf (g: Graph) : Prop :=
 Notation "∅" := Empty.
 Notation "o-" := Zero.
 Notation "-o" := Discard.
-Notation ">-" := Add.
+Notation ">-" := Addition.
 Notation "-<" := Copy.
 Notation "><" := Twist.
 Notation "--" := Id.
@@ -153,10 +153,14 @@ Inductive eqG: Graph -> Graph -> Prop :=
     forall A B,
       (A ⊕ ≡gin B≡) ∘ (≡gout A≡ ⊕ B) == (A ⊕ B)
 
-| TwistySliding:
+| TwistySliding1:
     forall A B,
       (A ⊕ B) ∘ (twister (gout A) (gout B)) ==
       (≡gin A≡ ⊕ B) ∘ (twister (gin A) (gout B)) ∘ (≡gout B≡ ⊕ A)
+| TwistySliding2:
+    forall A B,
+      (A ⊕ B) ∘ (twister (gout A) (gout B)) ==
+      (A ⊕ ≡gin B≡) ∘ (twister (gout A) (gin B)) ∘ (B ⊕ ≡gout A≡)
 
 (** Middle Four Interchange principle **)
 | MFI: forall (A: Graph) (B: Graph)
@@ -256,8 +260,24 @@ Proof.
   apply wf_idm.
 Qed.
 
+
+Lemma gin_bizarro_gout:
+  forall g,
+    gin (bizarro g) = gout g.
+Proof.
+  induction g; simpl; intros; eauto.
+Qed.
+
+Lemma gout_bizarro_gin:
+  forall g,
+    gout (bizarro g) = gin g.
+Proof.
+  induction g; simpl; intros; eauto.
+Qed.
+
 Ltac simpl_gin_gout :=
-  rewrite ? gin_idm, ? gin_twister, ? gin_twist_aux, ? gout_idm, ? gout_twister, ? gout_twist_aux.
+  rewrite ? gin_idm, ? gin_twister, ? gin_twist_aux, ? gout_idm, ? gout_twister, ? gout_twist_aux,
+  ? gin_bizarro_gout, ? gout_bizarro_gin.
 
 Ltac solve_wf :=
   first [
@@ -271,7 +291,7 @@ Ltac check_consistency :=
     assert (wf g1 /\ wf g2 /\ gout g1 = gout g2 /\ gin g1 = gin g2);
     [
       cbn; intuition; simpl_gin_gout; try omega; try solve_wf
-      |
+    |
     ]
   end.
 
@@ -314,7 +334,7 @@ Proof.
   apply Sym; constructor; auto.
   apply Sym; constructor; auto.
 Qed.
-   
+
 Lemma slide_right: forall (g1: Graph) (g2: Graph),
     g1 ⊕ g2 == (≡gin g1≡ ∘ g1) ⊕ (g2 ∘ ≡gout g2≡).
 Proof.
@@ -482,14 +502,34 @@ Proof.
   - rewrite IHk.
     rewrite <- (IdRight --) at 1. simpl. rewrite IdDown.
     rewrite <- (MFI -- --) by (simpl; simpl_gin_gout; omega).
-    
+    rewrite ! twist_aux_sum.
+    rewrite ! sum_idn_comp by (simpl; simpl_gin_gout; omega).
+    rewrite ! sum_idn_comp_left by (simpl; simpl_gin_gout; omega).
+    rewrite ! AssocComp.
+    apply CongComp.
+    rewrite <- ! AssocComp.
+    apply CongComp.
+    + rewrite AssocSum. reflexivity.
+    + transitivity (twist_aux m ⊕ twister k n).
+      * etransitivity. 2: apply HorizontalSliding1.
+        simpl_gin_gout. simpl.
+        replace (k + n) with (n + k) by omega.
+        rewrite sum_distribute.
+        rewrite <- ! AssocSum. reflexivity.
+      * etransitivity. symmetry; apply HorizontalSliding2.
+        simpl_gin_gout. simpl.
+        rewrite sum_distribute.
+        rewrite idsum_reorder.
+        rewrite <- ! AssocSum. reflexivity.
+    + rewrite <- ! AssocSum. reflexivity.
 Qed.
 
 
-Goal (twister 2 3) == (-- ⊕ >< ⊕ ≡2≡) ∘ (>< ⊕ >< ⊕ --) ∘ ( -- ⊕ >< ⊕ >< ) ∘ (≡2≡ ⊕ >< ⊕ --).
-Proof.
-  cbn. Simpl.
-Qed.
+(* Goal (twister 2 3) == (-- ⊕ >< ⊕ ≡2≡) ∘ (>< ⊕ >< ⊕ --) ∘ ( -- ⊕ >< ⊕ >< ) ∘ (≡2≡ ⊕ >< ⊕ --). *)
+(* Proof. *)
+(*   cbn. Simpl. *)
+(*   rewrite <- ! AssocSum. *)
+(* Qed. *)
 
 
 Lemma slide_twist':
@@ -497,147 +537,292 @@ Lemma slide_twist':
     (g1 ⊕ g2) ∘ (twister (gout g1) (gout g2)) == (≡ gin g1 ≡ ⊕ g2) ∘ (twister (gin g1) (gout g2)) ∘ (≡ gout g2 ≡ ⊕ g1).
 Proof.
   intros.
-  rewrite slide_twist.
+  apply TwistySliding1.
 Qed.
+
+Lemma IdLeftGen:
+  forall g1 g2,
+    g1 == ≡gin g2≡ ->
+    g1 ∘ g2 == g2.
+Proof.
+  intros.
+  rewrite H.
+  rewrite IdLeft. reflexivity.
+Qed.
+
+Lemma IdRightGen:
+  forall g1 g2,
+    g2 == ≡gout g1≡ ->
+    g1 ∘ g2 == g1.
+Proof.
+  intros.
+  rewrite H.
+  rewrite IdRight. reflexivity.
+Qed.
+
 
 Lemma slide_test: (-- ⊕ o-) ∘ >< == (o- ⊕ --).
 Proof.
-  etransitivity.
-  2: etransitivity.
-  2: apply (slide_twist -- o-).
-  - rewrite twister_twist. reflexivity.
-  - rewrite twister_twist.
-    rewrite <- ! idm1.
-
+  rewrite <- twister_twist.
+  rewrite TwistySliding2.
+  simpl. Simpl.
+  apply IdLeftGen.
+  simpl. Simpl.
+  rewrite idm1.
+  rewrite ! IdLeft' by (simpl; simpl_gin_gout; omega).
+  reflexivity.
 Qed.
+
+Lemma twister_0_id:
+  forall n,
+    twister n 0 == ≡ n ≡.
+Proof.
+  induction n; simpl; intros. reflexivity.
+  rewrite IHn. Simpl.
+  apply IdLeftGen. simpl. simpl_gin_gout. reflexivity.
+Qed.
+
+Lemma zero_slide:
+  forall g,
+    gout g = 1 ->
+    (g ⊕ o-) ∘ >< == g ∘ (o- ⊕ ≡gout g≡).
+Proof.
+  intros.
+  rewrite <- twister_twist.
+  rewrite <- H at 1. rewrite TwistySliding2.
+  simpl. Simpl.
+  rewrite <- AssocComp.
+  apply CongComp. reflexivity.
+  apply IdLeftGen.
+  simpl. rewrite twister_0_id. simpl_gin_gout. reflexivity.
+Qed.
+
+(* Lemma twist_spec: *)
+(*   forall g2 g1, *)
+(*     gout g1 = 1 -> *)
+(*     (g1 ⊕ g2) ∘ (twist_aux (gout g2)) == g2 ⊕ g1. *)
+(* Proof. *)
+(*   induction g2; cbn; intros; Simpl. *)
+(*   - rewrite idm1. rewrite IdRight'; auto. reflexivity. *)
+(*   - rewrite AssocComp by (simpl; omega). *)
+(*     rewrite MFI by (simpl; omega). *)
+(*     rewrite idm1. rewrite IdRight. *)
+(*     rewrite IdRight'; auto. *)
+(*     rewrite zero_slide; auto. *)
+(*     transitivity (  (∅ ⊕ g1) ∘ (o- ⊕ (≡ gout g1 ≡))). *)
+(*     apply CongComp; Simpl; reflexivity. *)
+(*     rewrite MFI by (simpl; simpl_gin_gout; omega). *)
+(*     Simpl. *)
+(*     replace ∅ with (≡0≡). rewrite IdLeft'. *)
+(*     reflexivity. reflexivity. reflexivity. *)
+(*   -   *)
+(*     rewrite <- twister_twist. *)
+(*     rewrite <- H at 1. *)
+(*     rewrite TwistySliding. *)
+(* Qed. *)
 
 
 Lemma tropcool: (-- ⊕ o-) ∘ >- == --.
 Proof.
   rewrite <- Comm.
-  etransitivity.
-  eapply CongComp.
-  reflexivity.
-  apply Sym, Comm.
-
-
-
-
-  
-
+  rewrite ! AssocComp.
+  rewrite <- twister_twist.
+  rewrite TwistySliding2.
+  simpl. Simpl.
+  rewrite AssocComp.
+  rewrite (IdLeftGen (_ ∘ --)).
+  rewrite <- Unit. reflexivity.
+  simpl. Simpl. apply IdLeftGen.
+  simpl. Simpl. apply IdLeftGen.
+  simpl. Simpl. reflexivity.
 Qed.
-
-Axiom twist_twist:
-  >< ∘ >< == -- ⊕ --.
 
 Lemma twist_simpl:
   forall g1 g2,
-    gout g1 = 1 ->
-    gout g2 = 1 ->
-    (g1 ⊕ g2) ∘ >< == g2 ⊕ g1.
+    (g1 ⊕ g2) ∘ (twister (gout g1) (gout g2)) == twister (gin g1) (gin g2) ∘ (g2 ⊕ g1).
 Proof.
-  induction g1; cbn; intros; Simpl; try congruence.
-  - revert H0. induction g2; cbn in *; intros; try congruence.
-    + rewrite <- B3. rewrite <- AssocComp, <- CoComm by reflexivity. reflexivity.
-    +
-      
-
-
-      admit.
-    + admit.
-    + destruct (gout g2_1).
-      
-      rewrite Unit at 1.
-      etransitivity.
-      2: etransitivity.
-      2: apply MFI.
-      apply CongComp. reflexivity.
-      symmetry; apply IdDown.
-
-      
+  intros.
+  rewrite TwistySliding2.
+  replace (gin g2) with (gout (≡ gin g2 ≡)) at 2.
+  rewrite TwistySliding1.
+  simpl. simpl_gin_gout.
+  rewrite <- ! AssocComp.
+  rewrite IdLeftGen.
+  2: simpl; simpl_gin_gout.
+  2: rewrite sum_distribute; reflexivity.
+  2: simpl_gin_gout; reflexivity.
+  rewrite MFI.
+  rewrite IdLeft. rewrite IdRight.
+  reflexivity.
+  simpl_gin_gout; reflexivity.
+  simpl_gin_gout; reflexivity.
 Qed.
 
-Lemma twist_spec:
-  forall g2 g1,
-    gout g1 = 1 ->
-    (g1 ⊕ g2) ∘ (twist_aux (gout g2)) == g2 ⊕ g1.
+Lemma bizzaro_id:
+  forall n,
+    bizarro (≡n≡) == ≡n≡.
 Proof.
-  induction g2; cbn; intros; Simpl.
-  - rewrite idm1. rewrite IdRight'; auto. reflexivity.
-  - rewrite AssocComp by (simpl; omega).
-    rewrite MFI by (simpl; omega).
-    rewrite idm1. rewrite IdRight.
-    rewrite IdRight.
+  induction n; simpl; intros; eauto.
+  reflexivity.
+  rewrite IHn. reflexivity.
 Qed.
 
-
-Lemma slide_twist: forall (g1: Graph) (g2: Graph),
-    (g1 ⊕ g2) ∘ (twister (gout g1) (gout g2)) == (twister (gin g1) (gin g2)) ∘ (g2 ⊕ g1).
+Lemma twister_decompose:
+  forall n,
+    ((≡ n ≡) ⊕ ><) ∘ (twister n 1 ⊕ --) ==
+    (-- ⊕ twister n 1) ∘ (>< ⊕ (≡ n ≡)).
 Proof.
-  induction g1; cbn; intros g2.
-  - rewrite IdUp. rewrite IdRight. rewrite IdDown. rewrite IdLeft. reflexivity.
-  - rewrite IdDown.
-    rewrite (IdLeft'). 2: simpl; omega.
-    assert ( -- ⊕ (≡ gout g2≡) == ≡ gin (twist_aux (gout g2)) ≡).
-    rewrite gin_twist_aux. simpl. reflexivity.
-    rewrite H. rewrite IdLeft.
-    
-    induction n; cbn; intros m p q g1 g2.
-  - intros; subst.
-    rewrite IdLeft'. 2: simpl; rewrite H; omega.
-    
-    etransitivity. 2: apply IdRight.
-    apply CongComp. reflexivity.
-    simpl.
-    destruct m; cbn.
-    + apply IdRight.
-    + etransitivity. 2: apply IdRight.
-      apply CongComp. reflexivity.
-      cbn.
-      apply EqRect2'.
-      rewrite EqRect1.
-      eapply Trans.
-      refine (@EqRect2' _ _ _ _ _). (S m+q) (S (q+m)) _ _ (twister_obligation_2 q m)).
-      change (fun H => Graph (S (m+q))) with (Graph (S (m+q))). rewrite EqRect2.
-      generalize (twister_obligation_1 q m).
-      generalize (twister_obligation_2 q m).
-      generalize (q + m).
-      cbn.
-      intros.
-      rewrite bloup.
-
-
-      rewrite sum_distribute.
-      rewrite AssocSum.
-      clean.
-      apply bloup. cbn.
-      clean. 
-      rewrite cong_transport_r.
-  -
-    
+  induction n; simpl; intros.
+  - Simpl. rewrite IdRightGen.
+    rewrite IdLeftGen. reflexivity.
+    simpl; Simpl; reflexivity.
+    simpl; Simpl; reflexivity.
+  - Simpl.
+    rewrite (IdLeftGen (-- ⊕ --)).
+    2: simpl; Simpl; reflexivity.
+    rewrite <- IHn.
+    rewrite sum_id_comp.
+    rewrite idm1.
+    rewrite sum_idn_comp_left.
+    rewrite <- idm1.
+    rewrite <- ! AssocComp.
+    apply CongComp.
+    rewrite AssocSum; reflexivity.
+    2: simpl; simpl_gin_gout; omega.
+    2: simpl; simpl_gin_gout; omega.
+    rewrite <- sum_id_comp.
     rewrite IHn.
-    generalize (twister_obligation_1 q m).
-    generalize (twister_obligation_2 q m).
-    generalize (Nat.add_comm m q).
-    intro C.
-    generalize (f_equal S C). intro D.
-    cbn in *.
-    intros. rewrite cong_transport_r.
-    
-    generalize (Nat.add_comm m q).
-    intro C.
-    generalize (f_equal S C). intro D.
-    rewrite Nat.add_comm.
-    rewrite <- eq_rect_eq_dec.
-
-
+    rewrite idm1.
+    rewrite <- sum_distribute.
+    rewrite Nat.add_comm. rewrite sum_distribute.
+    rewrite ! AssocSum.
+    rewrite <- sum_idn_comp. reflexivity.
+    simpl; simpl_gin_gout; omega.
+    simpl; simpl_gin_gout; omega.
 Qed.
 
-(* Lemma tropcool: (-- ⊕ o-) ∘ >- == --. *)
-(* Proof. *)
-(*   etransitivity. *)
-(*   eapply CongComp. *)
-(*   reflexivity. *)
-(*   apply Sym, Comm. *)
-  
+Lemma bizarro_twist_aux:
+  forall n,
+    bizarro (twist_aux n) == twister n 1.
+Proof.
+  induction n; simpl; intros.
+  - reflexivity.
+  - rewrite IHn. clear IHn.
+    rewrite bizzaro_id.
+    Simpl.
+    rewrite (IdLeftGen (-- ⊕ --)). 2: simpl; Simpl; reflexivity.
+    apply twister_decompose.
+Qed.
 
+Lemma twister_decompose':
+  forall m n o,
+    (twister m n ⊕ (≡ o ≡)) ∘ (≡n≡ ⊕ twister m o) == twister m (n + o).
+Proof.
+  induction m; simpl; intros.
+  - rewrite <- sum_distribute. simpl_gin_gout. apply IdLeftGen.
+    simpl_gin_gout. reflexivity.
+  - 
+    rewrite twist_aux_sum.
+    rewrite ! sum_idn_comp. 
+    2: simpl; simpl_gin_gout; omega.
+    2: simpl; simpl_gin_gout; omega.
+    rewrite <- IHm.
+    rewrite idm1. rewrite (sum_idn_comp_left _ _ 1). rewrite <- idm1.
+    2: simpl; simpl_gin_gout; omega.
+    repeat rewrite <- ? AssocComp, <- ? AssocSum.
+    apply CongComp. reflexivity.
+    rewrite sum_idn_comp_left.
+    rewrite ! AssocComp. apply CongComp. 2: reflexivity.
+    2: simpl; simpl_gin_gout; omega.
+    rewrite <- ! sum_distribute.
+    rewrite ! AssocSum.
+    rewrite idsum_reorder.
+    rewrite idm1.
+    rewrite <- ! sum_distribute.
+    transitivity (twist_aux n ⊕ twister m o).
+    etransitivity. 2: apply HorizontalSliding2. simpl_gin_gout.
+    replace (S n) with (n + 1) by omega. reflexivity.
+    etransitivity. symmetry. apply HorizontalSliding1. simpl_gin_gout.
+    replace (S n) with (n + 1) by omega.
+    replace (m +o) with (o+m) by omega.
+    reflexivity.
+Qed.
+
+
+Lemma bizarro_twister:
+  forall n m,
+    bizarro (twister n m) == twister m n.
+Proof.
+  induction n; simpl; intros.
+  - rewrite bizzaro_id. rewrite twister_0_id. reflexivity.
+  - rewrite IHn. rewrite bizzaro_id.
+    rewrite bizarro_twist_aux.
+    replace (S n) with (1 + n) by omega.
+    rewrite <- twister_decompose'.
+    rewrite idm1. reflexivity.      
+Qed.
+
+
+Lemma bizarro_eq:
+  forall g1 g2,
+    g1 == g2 ->
+    bizarro g1 == bizarro g2.
+Proof.
+  induction 1; simpl.
+  - rewrite <- CoComm. reflexivity.
+  - rewrite CoAssoc. reflexivity.
+  - rewrite CoUnit. reflexivity.
+  - rewrite Comm; reflexivity.
+  - rewrite Assoc; reflexivity.
+  - rewrite <- Unit. reflexivity.
+  - rewrite B1. rewrite <- AssocComp. reflexivity.
+  - apply B3.
+  - apply B2.
+  - apply B4.
+  - apply IdLeftGen. rewrite bizzaro_id, gin_bizarro_gout. reflexivity.
+  - apply IdRightGen. rewrite bizzaro_id, gout_bizarro_gin. reflexivity.
+  - constructor.
+  - constructor.
+  - rewrite AssocComp; reflexivity.
+  - rewrite AssocSum; reflexivity.
+  - constructor.
+  - rewrite MFI; simpl; repeat simpl_gin_gout; try reflexivity.
+    rewrite ! bizzaro_id.
+    rewrite IdLeft' by (simpl_gin_gout; reflexivity).
+    rewrite IdRight' by (simpl_gin_gout; reflexivity).
+    reflexivity.
+  - rewrite ! bizzaro_id.
+    rewrite MFI.
+    rewrite IdLeft' by (simpl_gin_gout; reflexivity).
+    rewrite IdRight' by (simpl_gin_gout; reflexivity).
+    reflexivity.
+    simpl_gin_gout; reflexivity.
+    simpl_gin_gout; reflexivity.
+  -
+    rewrite ! bizarro_twister.
+    rewrite ! bizzaro_id.
+    rewrite AssocComp.
+    replace (gout B) with (gout (≡gout B≡)) at 3.
+    replace (gin A) with (gout (bizarro A)).
+    rewrite twist_simpl.
+    all: simpl_gin_gout; auto.
+    rewrite <- AssocComp. apply CongComp. reflexivity.
+    rewrite <- (HorizontalSliding2 (bizarro A) (bizarro B)). simpl_gin_gout.
+    reflexivity.
+  - rewrite ! bizarro_twister.
+    rewrite ! bizzaro_id.
+    rewrite AssocComp.
+    replace (gout A) with (gout (≡gout A≡)) at 3.
+    replace (gin B) with (gout (bizarro B)).
+    rewrite twist_simpl.
+    all: simpl_gin_gout; auto.
+    rewrite <- AssocComp. apply CongComp. reflexivity.
+    rewrite <- (HorizontalSliding1 (bizarro A) (bizarro B)). simpl_gin_gout.
+    reflexivity.
+  - apply MFI; simpl_gin_gout; auto.
+  - constructor; auto.
+  - constructor; auto.
+  - reflexivity.
+  - apply Sym; auto.
+  - etransitivity; eauto.
+Qed.
